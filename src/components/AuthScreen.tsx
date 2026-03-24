@@ -1,6 +1,10 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
 
+const SEND_CODE_URL = "https://functions.poehali.dev/e8b6e296-9bbc-47e3-a9f4-bae8a1fb2745";
+const VERIFY_CODE_URL = "https://functions.poehali.dev/3b44b629-28c0-4e44-bab7-70faf00f4e76";
+const REGISTER_URL = "https://functions.poehali.dev/42ba8771-a67b-4019-8cf2-72e76f4ea9ed";
+
 interface AuthScreenProps {
   onAuth: (user: { phone: string; username: string; name: string }) => void;
 }
@@ -8,18 +12,99 @@ interface AuthScreenProps {
 export default function AuthScreen({ onAuth }: AuthScreenProps) {
   const [step, setStep] = useState<"phone" | "code" | "profile">("phone");
   const [phone, setPhone] = useState("");
+  const [normalizedPhone, setNormalizedPhone] = useState("");
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [username, setUsername] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [devCode, setDevCode] = useState("");
 
-  const handlePhoneSubmit = () => {
+  const handlePhoneSubmit = async () => {
     if (phone.replace(/\D/g, "").length < 10) {
       setError("Введите корректный номер");
       return;
     }
     setError("");
-    setStep("code");
+    setLoading(true);
+    try {
+      const res = await fetch(SEND_CODE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Ошибка отправки");
+        return;
+      }
+      if (data.dev_code) setDevCode(data.dev_code);
+      setStep("code");
+    } catch {
+      setError("Нет соединения с сервером");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCodeSubmit = async () => {
+    const fullCode = code.join("");
+    if (fullCode.length < 6) {
+      setError("Введите полный код");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch(VERIFY_CODE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, code: fullCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Неверный код");
+        return;
+      }
+      if (data.is_new) {
+        setNormalizedPhone(data.phone || phone);
+        setStep("profile");
+      } else {
+        onAuth({
+          phone: data.user.phone,
+          username: data.user.username,
+          name: data.user.name,
+        });
+      }
+    } catch {
+      setError("Нет соединения с сервером");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProfileSubmit = async () => {
+    if (!name.trim()) { setError("Введите имя"); return; }
+    if (!username.trim() || username.length < 3) { setError("Никнейм минимум 3 символа"); return; }
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch(REGISTER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: normalizedPhone || phone, name, username }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Ошибка регистрации");
+        return;
+      }
+      onAuth({ phone: data.user.phone, username: data.user.username, name: data.user.name });
+    } catch {
+      setError("Нет соединения с сервером");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCodeChange = (idx: number, val: string) => {
@@ -28,38 +113,14 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
     newCode[idx] = val.slice(-1);
     setCode(newCode);
     if (val && idx < 5) {
-      const next = document.getElementById(`code-${idx + 1}`);
-      next?.focus();
+      document.getElementById(`code-${idx + 1}`)?.focus();
     }
   };
 
   const handleCodeKeyDown = (idx: number, e: React.KeyboardEvent) => {
     if (e.key === "Backspace" && !code[idx] && idx > 0) {
-      const prev = document.getElementById(`code-${idx - 1}`);
-      prev?.focus();
+      document.getElementById(`code-${idx - 1}`)?.focus();
     }
-  };
-
-  const handleCodeSubmit = () => {
-    if (code.join("").length < 6) {
-      setError("Введите полный код");
-      return;
-    }
-    setError("");
-    setStep("profile");
-  };
-
-  const handleProfileSubmit = () => {
-    if (!name.trim()) {
-      setError("Введите имя");
-      return;
-    }
-    if (!username.trim() || username.length < 3) {
-      setError("Никнейм минимум 3 символа");
-      return;
-    }
-    setError("");
-    onAuth({ phone, username: username.toLowerCase(), name });
   };
 
   const formatPhone = (val: string) => {
@@ -73,9 +134,10 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
     return result;
   };
 
+  const STEPS = ["phone", "code", "profile"];
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden bg-background">
-      {/* Animated background blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full opacity-20 animate-spin-slow"
           style={{ background: "radial-gradient(circle, #f72585, transparent)" }} />
@@ -86,52 +148,48 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
       </div>
 
       <div className="relative z-10 w-full max-w-sm px-6 animate-fade-in">
-        {/* Logo */}
         <div className="text-center mb-10">
           <h1 className="font-display text-7xl grad-text mb-2">VIBE</h1>
           <p className="text-muted-foreground text-sm">Живи ярко. Делись смело.</p>
         </div>
 
-        {/* Steps indicator */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          {["phone", "code", "profile"].map((s, i) => (
+          {STEPS.map((s, i) => (
             <div key={s} className="flex items-center gap-2">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
                 step === s ? "grad-btn text-white shadow-lg shadow-vibe-pink/30" :
-                ["phone","code","profile"].indexOf(step) > i ? "bg-vibe-purple text-white" :
+                STEPS.indexOf(step) > i ? "bg-vibe-purple text-white" :
                 "glass text-muted-foreground"
               }`}>{i + 1}</div>
               {i < 2 && <div className={`w-8 h-0.5 transition-all duration-300 ${
-                ["phone","code","profile"].indexOf(step) > i ? "bg-vibe-purple" : "bg-border"
+                STEPS.indexOf(step) > i ? "bg-vibe-purple" : "bg-border"
               }`} />}
             </div>
           ))}
         </div>
 
-        {/* Card */}
         <div className="glass-strong rounded-2xl p-6 animate-scale-in">
           {step === "phone" && (
             <div className="space-y-5">
               <div>
                 <h2 className="text-xl font-bold text-white mb-1">Введи номер телефона</h2>
-                <p className="text-muted-foreground text-sm">Отправим код подтверждения</p>
+                <p className="text-muted-foreground text-sm">Отправим SMS с кодом</p>
               </div>
-              <div>
-                <input
-                  type="tel"
-                  placeholder="+7 (___) ___-__-__"
-                  value={formatPhone(phone)}
-                  onChange={e => setPhone(e.target.value.replace(/\D/g, ""))}
-                  onKeyDown={e => e.key === "Enter" && handlePhoneSubmit()}
-                  className="w-full glass rounded-xl px-4 py-3.5 text-white placeholder-muted-foreground outline-none focus:ring-2 focus:ring-vibe-pink/50 transition-all text-lg font-medium"
-                />
-              </div>
+              <input
+                type="tel"
+                placeholder="+7 (___) ___-__-__"
+                value={formatPhone(phone)}
+                onChange={e => setPhone(e.target.value.replace(/\D/g, ""))}
+                onKeyDown={e => e.key === "Enter" && !loading && handlePhoneSubmit()}
+                className="w-full glass rounded-xl px-4 py-3.5 text-white placeholder-muted-foreground outline-none focus:ring-2 focus:ring-vibe-pink/50 transition-all text-lg font-medium"
+              />
               {error && <p className="text-red-400 text-sm">{error}</p>}
               <button
                 onClick={handlePhoneSubmit}
-                className="w-full grad-btn text-white font-bold py-3.5 rounded-xl hover-scale transition-all shadow-lg shadow-vibe-pink/20 animate-pulse-glow"
+                disabled={loading}
+                className="w-full grad-btn text-white font-bold py-3.5 rounded-xl hover-scale transition-all shadow-lg shadow-vibe-pink/20 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Получить код
+                {loading ? "Отправляем..." : "Получить код"}
               </button>
               <p className="text-center text-muted-foreground text-xs">
                 Продолжая, ты соглашаешься с условиями использования
@@ -144,6 +202,11 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
               <div>
                 <h2 className="text-xl font-bold text-white mb-1">Код подтверждения</h2>
                 <p className="text-muted-foreground text-sm">Отправили на {formatPhone(phone)}</p>
+                {devCode && (
+                  <p className="text-vibe-cyan text-xs mt-1 bg-vibe-cyan/10 px-3 py-1.5 rounded-lg">
+                    🛠 Тест-режим: код <span className="font-bold tracking-widest">{devCode}</span>
+                  </p>
+                )}
               </div>
               <div className="flex gap-2 justify-between">
                 {code.map((digit, idx) => (
@@ -163,12 +226,13 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
               {error && <p className="text-red-400 text-sm">{error}</p>}
               <button
                 onClick={handleCodeSubmit}
-                className="w-full grad-btn text-white font-bold py-3.5 rounded-xl hover-scale transition-all shadow-lg shadow-vibe-pink/20"
+                disabled={loading}
+                className="w-full grad-btn text-white font-bold py-3.5 rounded-xl hover-scale transition-all shadow-lg shadow-vibe-pink/20 disabled:opacity-60"
               >
-                Подтвердить
+                {loading ? "Проверяем..." : "Подтвердить"}
               </button>
               <button
-                onClick={() => { setStep("phone"); setCode(["","","","","",""]); setError(""); }}
+                onClick={() => { setStep("phone"); setCode(["","","","","",""]); setError(""); setDevCode(""); }}
                 className="w-full text-muted-foreground text-sm hover:text-white transition-colors"
               >
                 ← Изменить номер
@@ -182,7 +246,6 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
                 <h2 className="text-xl font-bold text-white mb-1">Создай профиль</h2>
                 <p className="text-muted-foreground text-sm">Как тебя будут знать в VIBE?</p>
               </div>
-
               <div className="flex justify-center">
                 <div className="w-20 h-20 story-ring cursor-pointer hover-scale">
                   <div className="w-full h-full rounded-full glass-strong flex items-center justify-center m-0.5">
@@ -190,7 +253,6 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
                   </div>
                 </div>
               </div>
-
               <div className="space-y-3">
                 <input
                   type="text"
@@ -206,18 +268,18 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
                     placeholder="никнейм"
                     value={username}
                     onChange={e => setUsername(e.target.value.replace(/[^a-zA-Z0-9_.]/g, ""))}
-                    onKeyDown={e => e.key === "Enter" && handleProfileSubmit()}
+                    onKeyDown={e => e.key === "Enter" && !loading && handleProfileSubmit()}
                     className="w-full glass rounded-xl pl-8 pr-4 py-3.5 text-white placeholder-muted-foreground outline-none focus:ring-2 focus:ring-vibe-pink/50 transition-all"
                   />
                 </div>
               </div>
-
               {error && <p className="text-red-400 text-sm">{error}</p>}
               <button
                 onClick={handleProfileSubmit}
-                className="w-full grad-btn text-white font-bold py-3.5 rounded-xl hover-scale transition-all shadow-lg shadow-vibe-pink/20"
+                disabled={loading}
+                className="w-full grad-btn text-white font-bold py-3.5 rounded-xl hover-scale transition-all shadow-lg shadow-vibe-pink/20 disabled:opacity-60"
               >
-                Начать 🎉
+                {loading ? "Создаём профиль..." : "Начать 🎉"}
               </button>
             </div>
           )}

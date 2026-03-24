@@ -1,0 +1,20 @@
+
+CREATE TABLE IF NOT EXISTS t_p80023021_social_network_insta.users (
+  id SERIAL PRIMARY KEY,
+  phone VARCHAR(20) UNIQUE NOT NULL,
+  username VARCHAR(50) UNIQUE NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  bio TEXT DEFAULT '',
+  website VARCHAR(200) DEFAULT '',
+  avatar_url TEXT DEFAULT '',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS t_p80023021_social_network_insta.sms_codes (
+  id SERIAL PRIMARY KEY,
+  phone VARCHAR(20) NOT NULL,
+  code VARCHAR(6) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '10 minutes',
+  used BOOLEAN DEFAULT FALSE
+);

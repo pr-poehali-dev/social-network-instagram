@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "Register - missing fields",
+      "method": "POST",
+      "path": "/",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Register - short username",
+      "method": "POST",
+      "path": "/",
+      "body": {"phone": "+79991234567", "name": "Тест", "username": "ab"},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

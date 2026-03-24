@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "Send code - missing phone",
+      "method": "POST",
+      "path": "/",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Send code - dev mode (no api key)",
+      "method": "POST",
+      "path": "/",
+      "body": {"phone": "+79991234567"},
+      "expectedStatus": 200,
+      "expectedBody": {"success": true},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
