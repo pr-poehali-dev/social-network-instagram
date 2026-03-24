@@ -37,6 +37,11 @@ export default function Index() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
   };
 
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
   if (!loaded) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -57,7 +62,7 @@ export default function Index() {
       case "search": return <SearchScreen />;
       case "messages": return <MessagesScreen currentUser={user} />;
       case "notifications": return <NotificationsScreen />;
-      case "profile": return <ProfileScreen currentUser={user} />;
+      case "profile": return <ProfileScreen currentUser={user} onLogout={handleLogout} />;
       default: return <Feed currentUser={user} />;
     }
   };

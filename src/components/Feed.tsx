@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import StoriesBar from "./StoriesBar";
 
@@ -69,8 +69,21 @@ export default function Feed({ currentUser }: FeedProps) {
   const [uploading, setUploading] = useState(false);
   const [openComments, setOpenComments] = useState<number | null>(null);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const lastScrollY = useRef(0);
   const photoRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (y > lastScrollY.current && y > 80) setHeaderVisible(false);
+      else setHeaderVisible(true);
+      lastScrollY.current = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const toggleLike = (id: number) => {
     setPosts(prev => prev.map(p =>
@@ -154,7 +167,7 @@ export default function Feed({ currentUser }: FeedProps) {
   return (
     <div className="pb-24">
       {/* Top bar */}
-      <div className="sticky top-0 z-30 glass-strong border-b border-border/50">
+      <div className={`sticky top-0 z-30 glass-strong border-b border-border/50 transition-transform duration-300 ${headerVisible ? "translate-y-0" : "-translate-y-full"}`}>
         <div className="flex items-center justify-between px-4 py-3">
           <h1 className="font-display text-3xl grad-text">VIBE</h1>
           <div className="flex items-center gap-3">

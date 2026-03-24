@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 
 const UPLOAD_URL = "https://functions.poehali.dev/aed84985-58a0-42a9-9a86-68ed185d1b8f";
@@ -43,8 +43,55 @@ export default function MessagesScreen({ currentUser }: MessagesScreenProps) {
   const [calling, setCalling] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [mediaPreview, setMediaPreview] = useState<{ url: string; type: "image" | "video"; base64: string; mimeType: string } | null>(null);
+  const [attachOpen, setAttachOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const videoMsgRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const ringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Ring tone via Web Audio API
+  const startRinging = () => {
+    try {
+      const ctx = new AudioContext();
+      audioCtxRef.current = ctx;
+      const playBeep = () => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.setValueAtTime(480, ctx.currentTime);
+        osc.frequency.setValueAtTime(420, ctx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.8);
+      };
+      playBeep();
+      ringIntervalRef.current = setInterval(playBeep, 1500);
+    } catch (_e) { /* AudioContext not supported */ }
+  };
+
+  const stopRinging = () => {
+    if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
+    audioCtxRef.current?.close();
+    audioCtxRef.current = null;
+  };
+
+  const handleCall = () => {
+    setCalling(true);
+    startRinging();
+  };
+
+  const handleHangup = () => {
+    setCalling(false);
+    stopRinging();
+  };
 
   const now = () => new Date().toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" });
 
@@ -113,17 +160,17 @@ export default function MessagesScreen({ currentUser }: MessagesScreenProps) {
             <p className="text-xs text-green-400">{activeChat.online ? "в сети" : "не в сети"}</p>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setCalling(true)} className="w-9 h-9 glass rounded-full flex items-center justify-center hover-scale">
+            <button onClick={handleCall} className="w-9 h-9 glass rounded-full flex items-center justify-center hover-scale">
               <Icon name="Phone" size={16} className="text-vibe-cyan" />
             </button>
-            <button onClick={() => setCalling(true)} className="w-9 h-9 glass rounded-full flex items-center justify-center hover-scale">
+            <button onClick={handleCall} className="w-9 h-9 glass rounded-full flex items-center justify-center hover-scale">
               <Icon name="Video" size={16} className="text-vibe-pink" />
             </button>
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 pb-28">
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 pb-32">
           {messages.map((msg, i) => (
             <div
               key={msg.id}
@@ -172,11 +219,12 @@ export default function MessagesScreen({ currentUser }: MessagesScreenProps) {
               )}
             </div>
           ))}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Media preview above input */}
         {mediaPreview && (
-          <div className="fixed bottom-20 left-0 right-0 z-40 px-4 pb-2">
+          <div className="fixed bottom-24 left-0 right-0 z-40 px-4 pb-2">
             <div className="glass-strong rounded-2xl p-3 flex items-center gap-3 max-w-lg mx-auto">
               {mediaPreview.type === "video" ? (
                 <video src={mediaPreview.url} className="w-16 h-16 object-cover rounded-xl" />
@@ -202,41 +250,46 @@ export default function MessagesScreen({ currentUser }: MessagesScreenProps) {
         )}
 
         {/* Input */}
-        <div className="fixed bottom-0 left-0 right-0 glass-strong border-t border-border/50 px-4 py-3 flex items-center gap-2 z-30">
+        <div className="fixed bottom-[72px] left-0 right-0 glass-strong border-t border-border/50 px-4 py-3 flex items-center gap-2 z-30 max-w-lg mx-auto">
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => handleFileSelect(e, "image")} />
           <input ref={videoMsgRef} type="file" accept="video/*" className="hidden" onChange={e => handleFileSelect(e, "video")} />
 
-          {/* Media attach menu */}
-          <div className="relative group">
-            <button className="w-9 h-9 glass rounded-full flex items-center justify-center hover-scale">
-              <Icon name="Paperclip" size={18} className="text-muted-foreground" />
+          {/* Media attach toggle */}
+          <div className="relative">
+            <button
+              onClick={() => setAttachOpen(v => !v)}
+              className="w-9 h-9 glass rounded-full flex items-center justify-center hover-scale"
+            >
+              <Icon name={attachOpen ? "X" : "Paperclip"} size={18} className="text-muted-foreground" />
             </button>
-            <div className="absolute bottom-12 left-0 glass-strong rounded-2xl p-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all shadow-xl min-w-32">
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-2 px-3 py-2 text-white hover:bg-white/10 rounded-xl text-sm"
-              >
-                <Icon name="Image" size={16} className="text-vibe-pink" />
-                Фото
-              </button>
-              <button
-                onClick={() => videoMsgRef.current?.click()}
-                className="flex items-center gap-2 px-3 py-2 text-white hover:bg-white/10 rounded-xl text-sm"
-              >
-                <Icon name="Video" size={16} className="text-vibe-cyan" />
-                Видео
-              </button>
-            </div>
+            {attachOpen && (
+              <div className="absolute bottom-12 left-0 glass-strong rounded-2xl p-2 flex flex-col gap-1 shadow-xl min-w-32 animate-scale-in z-50">
+                <button
+                  onClick={() => { setAttachOpen(false); fileRef.current?.click(); }}
+                  className="flex items-center gap-2 px-3 py-2 text-white hover:bg-white/10 rounded-xl text-sm"
+                >
+                  <Icon name="Image" size={16} className="text-vibe-pink" />
+                  Фото
+                </button>
+                <button
+                  onClick={() => { setAttachOpen(false); videoMsgRef.current?.click(); }}
+                  className="flex items-center gap-2 px-3 py-2 text-white hover:bg-white/10 rounded-xl text-sm"
+                >
+                  <Icon name="Video" size={16} className="text-vibe-cyan" />
+                  Видео
+                </button>
+              </div>
+            )}
           </div>
 
           <input
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && sendMessage()}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); sendMessage(); } }}
             placeholder="Сообщение..."
             className="flex-1 glass rounded-2xl px-4 py-2.5 text-white text-sm placeholder-muted-foreground outline-none focus:ring-2 focus:ring-vibe-pink/50 transition-all"
           />
-          {input ? (
+          {input.trim() ? (
             <button onClick={sendMessage} className="w-9 h-9 grad-btn rounded-full flex items-center justify-center hover-scale shadow-md shadow-vibe-pink/20">
               <Icon name="Send" size={16} className="text-white" />
             </button>
@@ -265,7 +318,7 @@ export default function MessagesScreen({ currentUser }: MessagesScreenProps) {
             <h2 className="text-white text-2xl font-bold mb-2">{activeChat.user}</h2>
             <p className="text-muted-foreground mb-12 animate-pulse">Вызов...</p>
             <div className="flex gap-8">
-              <button className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center hover-scale shadow-xl shadow-red-500/30" onClick={() => setCalling(false)}>
+              <button className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center hover-scale shadow-xl shadow-red-500/30" onClick={handleHangup}>
                 <Icon name="PhoneOff" size={24} className="text-white" />
               </button>
               <button className="w-16 h-16 glass rounded-full flex items-center justify-center hover-scale">
